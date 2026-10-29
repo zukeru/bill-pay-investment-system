@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+const base = process.env.BASE_URL || 'http://localhost:8080';
+let checks = 0;
+async function call(path, {token, method='GET', body, status=200}={}) {
+  const response=await fetch(`${base}/api${path}`,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{ }),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  const data=await response.json();
+  assert.equal(response.status,status,`${method} ${path}: ${response.status} ${JSON.stringify(data)}`);
+  checks++;return data;
+}
+const health=await call('/health'); assert.equal(health.liveEnabled,false);
+const backer=await call('/auth/login',{method:'POST',body:{email:'investor@billionairepay.local',password:'BackerDemo!2026'}});
+const applicant=await call('/auth/login',{method:'POST',body:{email:'applicant@billionairepay.local',password:'ApplicantDemo!2026'}});
+const admin=await call('/auth/login',{method:'POST',body:{email:'admin@billionairepay.local',password:'AdminDemo!2026'}});
+assert.equal(backer.user.role,'backer');assert.equal(applicant.user.role,'applicant');assert.equal(admin.user.role,'admin');
+await call('/auth/me',{status:401});
+const feed=await call('/requests',{token:backer.token});assert.ok(feed.requests.length>0);
+assert.ok(feed.requests.every(r=>!('email' in r)&&!('profile' in r)&&!('dob' in r)));
+const bills=await call('/requests?kind=bill',{token:backer.token});assert.ok(bills.requests.every(r=>r.kind==='bill'));
+const projects=await call('/requests?kind=project',{token:backer.token});assert.ok(projects.requests.every(r=>r.kind==='project'));
+await call('/my/requests',{token:applicant.token});
+await call('/admin/requests',{token:backer.token,status:403});
+await call('/admin/requests',{token:admin.token});
+await call('/activity',{token:backer.token});
+await call('/saved',{token:backer.token});
+const compliance=await call('/compliance');assert.equal(compliance.liveEnabled,false);
+await call('/auth/logout',{method:'POST',token:backer.token});
+await call('/auth/me',{token:backer.token,status:401});
+await call('/auth/logout',{method:'POST',token:applicant.token});
+await call('/auth/logout',{method:'POST',token:admin.token});
+console.log(`PASS: ${checks} deployed API checks; roles, privacy projection, filters, legal gate and session revocation verified.`);

@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Billionaire Pay",
+    "slug": "billionaire-pay",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "local.billionairepay.app"
+    },
+    "android": {
+      "package": "local.billionairepay.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Billionaire Pay",
+      "description": "Small acts. Meaningful change. Explore requests and support possibility."
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-document-picker",
+      "expo-font",
+      "expo-sharing"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/.expo
+**/dist
+.env
+.env.*
+.local
+.qa
+design
+*.log

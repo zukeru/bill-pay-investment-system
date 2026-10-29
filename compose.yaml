@@ -1,0 +1,92 @@
+name: billionaire-pay
+services:
+  mailpit:
+    image: axllent/mailpit:v1.29
+    ports:
+      - '127.0.0.1:8025:8025'
+    restart: unless-stopped
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: billionaire
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+      POSTGRES_DB: billionairepay
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U billionaire -d billionairepay']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgres://billionaire:${POSTGRES_PASSWORD:-local-development-only}@db:5432/billionairepay
+      PORT: 3001
+      HOST: 0.0.0.0
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080,http://127.0.0.1:8080}
+      TRUST_PROXY_HOPS: '1'
+      UPLOAD_DIR: /app/uploads
+      SEED_DEMO: 'true'
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: noreply@billionairepay.local
+      NODE_ENV: production
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    volumes:
+      - private_uploads:/app/uploads
+    depends_on:
+      mailpit:
+        condition: service_started
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://127.0.0.1/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+  native:
+    profiles: [native]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mobile-dev
+    environment:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      REACT_NATIVE_PACKAGER_HOSTNAME: 127.0.0.1
+      EXPO_PUBLIC_API_URL: http://localhost:8080/api
+    ports:
+      - '127.0.0.1:8081:8081'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8081/status').then(async r=>{if(!r.ok||!(await r.text()).includes('running'))process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  private_uploads:
